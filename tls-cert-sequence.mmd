@@ -1,0 +1,35 @@
+%% tls-cert-sequence.mmd
+%% Sequence diagram: hoe certificaten werken in een TLS-verbinding
+
+sequenceDiagram
+    autonumber
+    participant U as Browser/Client
+    participant S as Website/Server (www.example.com)
+    participant IC as Intermediate CA
+    participant RC as Root CA (in trust store)
+    participant OCSP as OCSP/CRL Service (CA)
+
+    U->>S: 1) ClientHello (SNI=www.example.com, ciphers, ALPN)
+    S-->>U: 2) ServerHello + Certificate chain <br/>(ServerCert + IntermediateCert)
+
+    Note over S,U: Server stuurt zijn certificaatketen mee <br/> (Root CA niet meegestuurd)
+
+    U->>U: 3) Controle domeinnaam (CN/SAN = www.example.com)
+    U->>U: 4) Controle geldigheid (notBefore / notAfter)
+    U->>U: 5) Controle handtekening (ServerCert getekend door Intermediate CA)
+    U->>U: 6) Controle Intermediate getekend door Root CA
+    U->>RC: 7) Vind Root CA in lokale trust store
+    RC-->>U: 8) Root public key (vertrouwd)
+
+    rect rgb(245,245,245)
+    U->>OCSP: 9) Revocation check (OCSP/CRL) voor Server/Intermediate
+    OCSP-->>U: 10) Status: good/revoked/unknown
+    end
+
+    alt Alles geldig
+      U->>S: 11) Key Exchange / Finished
+      Note over U,S: Sleutelafspraak voltooid → sessiesleutels afgeleid
+      U-->>S: 12) Versleuteld verkeer (HTTPS)
+    else Ongeldig (cert verlopen / fout domein / revoked)
+      U->>U: Toon foutmelding & blokkeer verbinding
+    end
