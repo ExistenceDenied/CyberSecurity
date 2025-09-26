@@ -1,35 +1,39 @@
-%% tls-cert-sequence.mmd
-%% Sequence diagram: hoe certificaten werken in een TLS-verbinding
+%% tls-cert-sequence-with-dns.mmd
+%% Sequence diagram: TLS handshake inclusief DNS en certificaatvalidatie
 
 sequenceDiagram
     autonumber
     participant U as Browser/Client
+    participant DNS as DNS Resolver
     participant S as Website/Server (www.example.com)
     participant IC as Intermediate CA
-    participant RC as Root CA (in trust store)
-    participant OCSP as OCSP/CRL Service (CA)
+    participant RC as Root CA (trust store)
+    participant OCSP as OCSP/CRL Service
 
-    U->>S: 1) ClientHello (SNI=www.example.com, ciphers, ALPN)
-    S-->>U: 2) ServerHello + Certificate chain <br/>(ServerCert + IntermediateCert)
+    U->>DNS: 1) DNS query: www.example.com
+    DNS-->>U: 2) DNS response: IP address (A/AAAA) <br/>(optioneel DNSSEC validatie)
 
-    Note over S,U: Server stuurt zijn certificaatketen mee <br/> (Root CA niet meegestuurd)
+    U->>S: 3) ClientHello (SNI=www.example.com, ciphers, ALPN)
+    S-->>U: 4) ServerHello + Certificate chain <br/>(ServerCert + Intermediate)
 
-    U->>U: 3) Controle domeinnaam (CN/SAN = www.example.com)
-    U->>U: 4) Controle geldigheid (notBefore / notAfter)
-    U->>U: 5) Controle handtekening (ServerCert getekend door Intermediate CA)
-    U->>U: 6) Controle Intermediate getekend door Root CA
-    U->>RC: 7) Vind Root CA in lokale trust store
-    RC-->>U: 8) Root public key (vertrouwd)
+    Note over S,U: Server stuurt certificaatketen mee<br/>(Root CA niet meegestuurd)
+
+    U->>U: 5) Controle CN/SAN = www.example.com
+    U->>U: 6) Controle geldigheid (notBefore/notAfter)
+    U->>U: 7) Verifieer handtekening ServerCert door Intermediate
+    U->>U: 8) Verifieer Intermediate door Root CA
+    U->>RC: 9) Root CA staat in trust store
+    RC-->>U: 10) Root key = vertrouwd
 
     rect rgb(245,245,245)
-    U->>OCSP: 9) Revocation check (OCSP/CRL) voor Server/Intermediate
-    OCSP-->>U: 10) Status: good/revoked/unknown
+    U->>OCSP: 11) Revocation check (OCSP/CRL)
+    OCSP-->>U: 12) Status: good/revoked/unknown
     end
 
     alt Alles geldig
-      U->>S: 11) Key Exchange / Finished
-      Note over U,S: Sleutelafspraak voltooid → sessiesleutels afgeleid
-      U-->>S: 12) Versleuteld verkeer (HTTPS)
-    else Ongeldig (cert verlopen / fout domein / revoked)
+      U->>S: 13) Key Exchange / Finished
+      Note over U,S: Sessiesleutels afgeleid
+      U-->>S: 14) Versleuteld verkeer (HTTPS)
+    else Ongeldig (DNS mismatch / revoked / verlopen)
       U->>U: Toon foutmelding & blokkeer verbinding
     end
